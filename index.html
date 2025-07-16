@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EchoRoom</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Yjs and y-webrtc dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/yjs@13.6.10/dist/yjs.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/y-webrtc@1.0.1/dist/y-webrtc.umd.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .dark-mode {
+            background-color: #1a1a1a;
+            color: #f0f0f0;
+        }
+        .light-mode {
+            background-color: #f0f0f0;
+            color: #1a1a1a;
+        }
+        .dark-mode .bg-white { background-color: #2a2a2a; }
+        .dark-mode .text-gray-800 { color: #f0f0f0; }
+        .dark-mode .text-gray-600 { color: #b0b0b0; }
+        .dark-mode .border-gray-300 { border-color: #444; }
+        .dark-mode .focus\\:ring-blue-500:focus { --tw-ring-color: #60a5fa; }
+        .dark-mode .shadow-md { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.12); }
+        .dark-mode .hover\\:bg-gray-100:hover { background-color: #3a3a3a; }
+        .dark-mode .bg-blue-500 { background-color: #4a90e2; }
+        .dark-mode .hover\\:bg-blue-600:hover { background-color: #3a7bd5; }
+        .dark-mode .bg-gray-200 { background-color: #333; }
+        .dark-mode .text-gray-700 { color: #ccc; }
+        .dark-mode .bg-gray-50 { background-color: #222; }
+        .dark-mode .placeholder-gray-500::placeholder { color: #888; }
+
+        /* Custom scrollbar for chat messages */
+        .chat-messages::-webkit-scrollbar {
+            width: 8px;
+        }
+        .chat-messages::-webkit-scrollbar-track {
+            background: #e0e0e0; /* Light mode */
+            border-radius: 10px;
+        }
+        .dark-mode .chat-messages::-webkit-scrollbar-track {
+            background: #333; /* Dark mode */
+        }
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        .chat-messages::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* Message animations */
+        .message-enter-active, .message-leave-active {
+            transition: all 0.3s ease;
+        }
+        .message-enter-from, .message-leave-to {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        /* Floating send button */
+        .floating-send-button {
+            position: absolute;
+            right: 10px;
+            bottom: 10px;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body class="light-mode min-h-screen flex flex-col">
+    <div class="container mx-auto p-4 flex-grow flex flex-col md:flex-row">
+        <!-- Header -->
+        <header class="w-full flex justify-between items-center mb-6 md:mb-0 md:mr-6">
+            <h1 class="text-3xl font-bold text-gray-800">EchoRoom</h1>
+            <button id="darkModeToggle" class="p-2 rounded-full bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors">
+                <i class="fas fa-moon" id="darkModeIcon"></i>
+            </button>
+        </header>
+
+        <!-- Main Content Area -->
+        <div class="flex-grow flex flex-col md:flex-row rounded-lg shadow-md overflow-hidden bg-white">
+            <!-- Chatroom List (Left Panel) -->
+            <div class="w-full md:w-1/4 bg-gray-50 border-r border-gray-200 p-4 flex flex-col">
+                <h2 class="text-xl font-semibold mb-4 text-gray-800">Chatrooms</h2>
+                <div id="chatroomList" class="flex-grow overflow-y-auto mb-4 space-y-2">
+                    <!-- Chatrooms will be loaded here -->
+                </div>
+                <div class="mt-auto">
+                    <input type="text" id="newChatroomName" placeholder="New chatroom name"
+                           class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2 bg-white text-gray-800 placeholder-gray-500">
+                    <button id="createChatroomBtn"
+                            class="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors">
+                        Create Chatroom
+                    </button>
+                </div>
+            </div>
+
+            <!-- Chat Area (Right Panel) -->
+            <div class="w-full md:w-3/4 flex flex-col">
+                <div id="chatHeader" class="bg-gray-100 p-4 border-b border-gray-200 text-gray-800 font-semibold text-lg">
+                    Select a chatroom to start chatting...
+                </div>
+                <div id="peerCount" class="text-sm text-gray-600 px-4 pb-2 bg-gray-100">
+                    Connected Peers: 0
+                </div>
+                <div id="chatMessages" class="chat-messages flex-grow p-4 overflow-y-auto space-y-4">
+                    <!-- Messages will be loaded here -->
+                </div>
+                <div id="messageInputArea" class="p-4 border-t border-gray-200 bg-gray-50 flex items-center relative">
+                    <input type="text" id="messageInput" placeholder="Type a message..."
+                           class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mr-2 bg-white text-gray-800 placeholder-gray-500">
+
+                    <input type="file" id="imageInput" accept="image/*" class="hidden">
+                    <button id="attachImageBtn" class="p-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors mr-2">
+                        <i class="fas fa-paperclip"></i>
+                    </button>
+
+                    <button id="voiceMessageBtn" class="p-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors mr-2">
+                        <i class="fas fa-microphone"></i>
+                    </button>
+
+                    <button id="sendMessageBtn" class="p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors floating-send-button">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Message Box for alerts/confirmations -->
+    <div id="messageBox" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+        <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full text-center">
+            <p id="messageBoxText" class="text-gray-800 mb-4"></p>
+            <button id="messageBoxOkBtn" class="bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors">OK</button>
+        </div>
+    </div>
+
+    <script>
+        const chatroomList = document.getElementById('chatroomList');
+        const newChatroomNameInput = document.getElementById('newChatroomName');
+        const createChatroomBtn = document.getElementById('createChatroomBtn');
+        const chatHeader = document.getElementById('chatHeader');
+        const peerCountDisplay = document.getElementById('peerCount');
+        const chatMessages = document.getElementById('chatMessages');
+        const messageInput = document.getElementById('messageInput');
+        const sendMessageBtn = document.getElementById('sendMessageBtn');
+        const attachImageBtn = document.getElementById('attachImageBtn');
+        const imageInput = document.getElementById('imageInput');
+        const voiceMessageBtn = document.getElementById('voiceMessageBtn');
+        const darkModeToggle = document.getElementById('darkModeToggle');
+        const darkModeIcon = document.getElementById('darkModeIcon');
+        const messageBox = document.getElementById('messageBox');
+        const messageBoxText = document.getElementById('messageBoxText');
+        const messageBoxOkBtn = document.getElementById('messageBoxOkBtn');
+
+        let currentChatroom = null; // Stores the currently active chatroom ID
+        let currentYdoc = null; // Y.Doc for the current chatroom
+        let currentWebrtcProvider = null; // y-webrtc provider for the current chatroom
+        let messagesYArray = null; // Y.Array for messages in the current chatroom
+        let mediaRecorder; // For voice messages
+        let audioChunks = []; // For voice messages
+
+        // Generate a unique user ID for this session
+        const userId = `user-${Math.random().toString(36).substring(2, 9)}`;
+
+        // Function to show a custom message box instead of alert/confirm
+        function showMessageBox(message) {
+            messageBoxText.textContent = message;
+            messageBox.classList.remove('hidden');
+        }
+
+        messageBoxOkBtn.addEventListener('click', () => {
+            messageBox.classList.add('hidden');
+        });
+
+        // Dark Mode Toggle
+        darkModeToggle.addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+            document.body.classList.toggle('light-mode');
+            const isDarkMode = document.body.classList.contains('dark-mode');
+            darkModeIcon.className = isDarkMode ? 'fas fa-sun' : 'fas fa-moon';
+            localStorage.setItem('darkMode', isDarkMode);
+        });
+
+        // Initialize dark mode based on local storage
+        const savedDarkMode = localStorage.getItem('darkMode');
+        if (savedDarkMode === 'true') {
+            document.body.classList.add('dark-mode');
+            document.body.classList.remove('light-mode');
+            darkModeIcon.className = 'fas fa-sun';
+        } else {
+            document.body.classList.add('light-mode');
+            document.body.classList.remove('dark-mode');
+            darkModeIcon.className = 'fas fa-moon';
+        }
+
+        // --- Chatroom Management (Local Storage for metadata) ---
+        function getChatrooms() {
+            try {
+                const chatrooms = JSON.parse(localStorage.getItem('chatrooms')) || [];
+                return chatrooms;
+            } catch (e) {
+                console.error("Error parsing chatrooms from localStorage:", e);
+                return [];
+            }
+        }
+
+        function saveChatrooms(chatrooms) {
+            localStorage.setItem('chatrooms', JSON.stringify(chatrooms));
+        }
+
+        function renderChatrooms() {
+            chatroomList.innerHTML = ''; // Clear existing list
+            const chatrooms = getChatrooms();
+            if (chatrooms.length === 0) {
+                chatroomList.innerHTML = '<p class="text-gray-600 text-sm">No chatrooms yet. Create one!</p>';
+            }
+            chatrooms.forEach(room => {
+                const roomElement = document.createElement('button');
+                roomElement.className = `w-full text-left p-3 rounded-md transition-colors ${currentChatroom === room.id ? 'bg-blue-100 text-blue-800 font-medium' : 'hover:bg-gray-100 text-gray-700'}`;
+                roomElement.textContent = room.name;
+                roomElement.dataset.id = room.id;
+                roomElement.addEventListener('click', () => selectChatroom(room.id, room.name));
+                chatroomList.appendChild(roomElement);
+            });
+        }
+
+        function createChatroom() {
+            const name = newChatroomNameInput.value.trim();
+            if (name) {
+                const chatrooms = getChatrooms();
+                // Check if a chatroom with this name already exists
+                if (chatrooms.some(room => room.name.toLowerCase() === name.toLowerCase())) {
+                    showMessageBox("A chatroom with this name already exists. Please choose a different name.");
+                    return;
+                }
+                const newRoom = {
+                    id: `chatroom-${Date.now()}`, // Unique ID for Yjs room name
+                    name: name,
+                };
+                chatrooms.push(newRoom);
+                saveChatrooms(chatrooms);
+                newChatroomNameInput.value = '';
+                renderChatrooms();
+                selectChatroom(newRoom.id, newRoom.name); // Automatically select new room
+            } else {
+                showMessageBox("Please enter a chatroom name.");
+            }
+        }
+
+        createChatroomBtn.addEventListener('click', createChatroom);
+
+        // --- Message Rendering ---
+        function renderMessages(messages) {
+            chatMessages.innerHTML = ''; // Clear existing messages
+            if (messages.length === 0) {
+                chatMessages.innerHTML = '<p class="text-gray-600 text-center text-sm">No messages yet. Say hello!</p>';
+            }
+            messages.forEach(msg => {
+                const messageElement = document.createElement('div');
+                // Determine if the message is sent by the current user
+                const isMyMessage = msg.senderId === userId;
+                messageElement.className = `message-enter-from p-3 rounded-lg shadow-sm max-w-[80%] break-words ${isMyMessage ? 'bg-blue-500 text-white self-end' : 'bg-gray-200 text-gray-800 self-start'}`;
+
+                // Add sender name/ID if not my message
+                if (!isMyMessage) {
+                    const senderSpan = document.createElement('span');
+                    senderSpan.className = 'block text-xs font-semibold mb-1 ' + (isMyMessage ? 'text-blue-100' : 'text-gray-600');
+                    senderSpan.textContent = `User: ${msg.senderId.substring(0, 7)}...`; // Show truncated ID for others
+                    messageElement.appendChild(senderSpan);
+                }
+
+                if (msg.type === 'text') {
+                    const textContent = document.createElement('p');
+                    textContent.textContent = msg.content;
+                    messageElement.appendChild(textContent);
+                } else if (msg.type === 'image') {
+                    const img = document.createElement('img');
+                    img.src = msg.content;
+                    img.alt = 'Shared Image';
+                    img.className = 'max-w-full h-auto rounded-md';
+                    messageElement.appendChild(img);
+                } else if (msg.type === 'voice') {
+                    const audioContainer = document.createElement('div');
+                    audioContainer.className = 'flex items-center';
+                    const audioIcon = document.createElement('i');
+                    audioIcon.className = 'fas fa-microphone text-lg mr-2';
+                    const audio = document.createElement('audio');
+                    audio.controls = true;
+                    audio.src = msg.content; // Base64 audio data
+                    audioContainer.appendChild(audioIcon);
+                    audioContainer.appendChild(audio);
+                    messageElement.appendChild(audioContainer);
+                }
+
+                // Add emoji reaction placeholder
+                const reactionContainer = document.createElement('div');
+                reactionContainer.className = 'flex mt-2 space-x-1';
+                const emojiButton = document.createElement('button');
+                emojiButton.className = 'text-sm p-1 rounded-full hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors';
+                emojiButton.innerHTML = '<i class="far fa-smile"></i>'; // Far for outline
+                emojiButton.title = 'Add Reaction';
+                emojiButton.addEventListener('click', () => showMessageBox("Emoji reactions coming soon!")); // Placeholder
+                reactionContainer.appendChild(emojiButton);
+                messageElement.appendChild(reactionContainer);
+
+                chatMessages.appendChild(messageElement);
+                // Trigger animation
+                setTimeout(() => messageElement.classList.remove('message-enter-from'), 50);
+            });
+            chatMessages.scrollTop = chatMessages.scrollHeight; // Scroll to bottom
+        }
+
+        // --- Send Message Function (Now uses Yjs) ---
+        function sendMessage() {
+            const text = messageInput.value.trim();
+            if (!currentChatroom) {
+                showMessageBox("Please select a chatroom first.");
+                return;
+            }
+            if (text) {
+                const newMessage = {
+                    id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`, // Unique ID
+                    type: 'text',
+                    content: text,
+                    timestamp: new Date().toISOString(),
+                    senderId: userId // Use the unique user ID
+                };
+                // Add message to Y.Array, which will synchronize it
+                messagesYArray.push([newMessage]);
+                messageInput.value = '';
+            } else {
+                showMessageBox("Message cannot be empty.");
+            }
+        }
+
+        sendMessageBtn.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        attachImageBtn.addEventListener('click', () => {
+            imageInput.click(); // Trigger the hidden file input
+        });
+
+        imageInput.addEventListener('change', (event) => {
+            if (event.target.files && event.target.files[0]) {
+                const file = event.target.files[0];
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    if (!currentChatroom) {
+                        showMessageBox("Please select a chatroom first.");
+                        return;
+                    }
+                    const newImageMessage = {
+                        id: `img-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+                        type: 'image',
+                        content: e.target.result, // Base64 encoded image
+                        timestamp: new Date().toISOString(),
+                        senderId: userId // Use the unique user ID
+                    };
+                    messagesYArray.push([newImageMessage]); // Add to Y.Array
+                    imageInput.value = ''; // Clear file input
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // --- Voice Message Recording ---
+        // Use pointerdown/pointerup for broader compatibility (mouse/touch)
+        voiceMessageBtn.addEventListener('pointerdown', startRecording);
+        voiceMessageBtn.addEventListener('pointerup', stopRecording);
+        // Add touchend as a fallback for some mobile browsers
+        voiceMessageBtn.addEventListener('touchend', stopRecording);
+
+        async function startRecording(event) {
+            // Prevent default touch behavior (e.g., long press context menu)
+            event.preventDefault();
+
+            if (!currentChatroom) {
+                showMessageBox("Please select a chatroom first.");
+                return;
+            }
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                // Already recording, do nothing
+                return;
+            }
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
+                mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        const newVoiceMessage = {
+                            id: `voice-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+                            type: 'voice',
+                            content: reader.result, // Base64 encoded audio
+                            timestamp: new Date().toISOString(),
+                            senderId: userId // Use the unique user ID
+                        };
+                        messagesYArray.push([newVoiceMessage]); // Add to Y.Array
+                        audioChunks = []; // Clear for next recording
+                    };
+                    reader.readAsDataURL(audioBlob);
+                    stream.getTracks().forEach(track => track.stop()); // Stop microphone
+                };
+                mediaRecorder.start();
+                voiceMessageBtn.textContent = 'Recording...';
+                voiceMessageBtn.classList.add('bg-red-500', 'hover:bg-red-600');
+                voiceMessageBtn.classList.remove('bg-gray-200', 'hover:bg-gray-300');
+            } catch (err) {
+                console.error('Error accessing microphone:', err);
+                showMessageBox('Could not access microphone. Please ensure permissions are granted.');
+            }
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                voiceMessageBtn.textContent = ''; // Reset text
+                voiceMessageBtn.classList.remove('bg-red-500', 'hover:bg-red-600');
+                voiceMessageBtn.classList.add('bg-gray-200', 'hover:bg-gray-300');
+                voiceMessageBtn.innerHTML = '<i class="fas fa-microphone"></i>'; // Reset icon
+            }
+        }
+
+        // --- WebRTC + Yjs Integration ---
+        function selectChatroom(id, name) {
+            // Disconnect from previous chatroom if any
+            if (currentWebrtcProvider) {
+                currentWebrtcProvider.destroy();
+                currentYdoc.destroy(); // Clean up Y.Doc
+                currentYdoc = null;
+                currentWebrtcProvider = null;
+                messagesYArray = null;
+            }
+
+            currentChatroom = id;
+            chatHeader.textContent = `Chatroom: ${name}`;
+            renderChatrooms(); // Re-render to highlight selected room
+
+            // Initialize Y.Doc for the selected chatroom
+            currentYdoc = new Y.Doc();
+            // Get the Y.Array for messages (or create if it doesn't exist)
+            messagesYArray = currentYdoc.getArray('messages');
+
+            // Listen for changes in the Y.Array and re-render messages
+            messagesYArray.observe(event => {
+                // When an update occurs, get the current state of the array and render
+                const messages = messagesYArray.toArray();
+                renderMessages(messages);
+            });
+
+            // Initialize y-webrtc provider with a public signaling server
+            // This signaling server helps peers discover each other across different networks.
+            // The actual message data is still transferred peer-to-peer via WebRTC.
+            currentWebrtcProvider = new Y.WebrtcProvider(id, currentYdoc, {
+                signaling: ['wss://signaling.yjs.dev'] // Public signaling server
+            });
+
+            // Update peer count display
+            currentWebrtcProvider.on('peers', ({ connectedPeers }) => {
+                peerCountDisplay.textContent = `Connected Peers: ${connectedPeers.size + 1}`; // +1 for self
+            });
+
+            // Initial render of messages from the Y.Array
+            renderMessages(messagesYArray.toArray());
+            messageInput.focus();
+        }
+
+        // Initial render of chatrooms
+        renderChatrooms();
+    </script>
+</body>
+</html>
