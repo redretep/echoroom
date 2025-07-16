@@ -1,4 +1,4 @@
-EchoRoom
+# EchoRoom
 
 EchoRoom is a minimalist, client-side, real-time chat application inspired by tlk.io and Ephemeros Chat. It leverages WebRTC and Yjs to enable peer-to-peer communication without the need for a traditional backend server to store or relay messages. A public signaling server is used to facilitate initial peer discovery, but message data flows directly between connected clients.
 Features
@@ -19,7 +19,7 @@ Features
 
     💨 Smooth UI Animations: Enjoy a fluid user experience with subtle animations.
 
-How It Works
+# How It Works
 
 EchoRoom utilizes the following core technologies:
 
@@ -29,7 +29,7 @@ EchoRoom utilizes the following core technologies:
 
     Signaling Server: While the message data is peer-to-peer, a small signaling server (wss://signaling.yjs.dev) is used to help peers discover each other and exchange initial connection information (like IP addresses and session descriptions). This server does not store any chat messages.
 
-How to Use
+# How to Use
 
     Create a Chatroom: Enter a name in the "New chatroom name" field and click "Create Chatroom."
 
@@ -46,7 +46,7 @@ How to Use
 To chat with others: Share the URL of your deployed EchoRoom application with friends. When they open the same URL and join the same chatroom name, their browsers will connect peer-to-peer, and messages will synchronize in real-time.
 Deployment on GitHub Pages
 
-You can easily host your EchoRoom application using GitHub Pages:
+# You can easily host your EchoRoom application using GitHub Pages:
 
     Create a GitHub Repository:
 
