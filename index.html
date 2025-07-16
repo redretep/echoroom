@@ -169,6 +169,7 @@
 
         // Generate a unique user ID for this session
         const userId = `user-${Math.random().toString(36).substring(2, 9)}`;
+        console.log("Your User ID:", userId);
 
         // Function to show a custom message box instead of alert/confirm
         function showMessageBox(message) {
@@ -295,7 +296,7 @@
                     const audio = document.createElement('audio');
                     audio.controls = true;
                     audio.src = msg.content; // Base64 audio data
-                    audioContainer.appendChild(audioIcon);
+                    messageElement.appendChild(audioIcon);
                     audioContainer.appendChild(audio);
                     messageElement.appendChild(audioContainer);
                 }
@@ -325,6 +326,11 @@
                 showMessageBox("Please select a chatroom first.");
                 return;
             }
+            if (!messagesYArray) {
+                console.error("messagesYArray is not initialized.");
+                showMessageBox("Chatroom not fully initialized. Please try selecting it again.");
+                return;
+            }
             if (text) {
                 const newMessage = {
                     id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`, // Unique ID
@@ -333,9 +339,15 @@
                     timestamp: new Date().toISOString(),
                     senderId: userId // Use the unique user ID
                 };
-                // Add message to Y.Array, which will synchronize it
-                messagesYArray.push([newMessage]);
-                messageInput.value = '';
+                console.log("Sending message:", newMessage);
+                try {
+                    // Corrected: Push the message object directly, not an array containing it
+                    messagesYArray.push(newMessage);
+                    messageInput.value = '';
+                } catch (e) {
+                    console.error("Error pushing message to Y.Array:", e);
+                    showMessageBox("Failed to send message. Check console for details.");
+                }
             } else {
                 showMessageBox("Message cannot be empty.");
             }
@@ -361,6 +373,11 @@
                         showMessageBox("Please select a chatroom first.");
                         return;
                     }
+                    if (!messagesYArray) {
+                        console.error("messagesYArray is not initialized for image.");
+                        showMessageBox("Chatroom not fully initialized. Please try selecting it again.");
+                        return;
+                    }
                     const newImageMessage = {
                         id: `img-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
                         type: 'image',
@@ -368,8 +385,15 @@
                         timestamp: new Date().toISOString(),
                         senderId: userId // Use the unique user ID
                     };
-                    messagesYArray.push([newImageMessage]); // Add to Y.Array
-                    imageInput.value = ''; // Clear file input
+                    console.log("Sending image:", newImageMessage);
+                    try {
+                        // Corrected: Push the message object directly
+                        messagesYArray.push(newImageMessage);
+                        imageInput.value = ''; // Clear file input
+                    } catch (e) {
+                        console.error("Error pushing image to Y.Array:", e);
+                        showMessageBox("Failed to send image. Check console for details.");
+                    }
                 };
                 reader.readAsDataURL(file);
             }
@@ -388,6 +412,11 @@
 
             if (!currentChatroom) {
                 showMessageBox("Please select a chatroom first.");
+                return;
+            }
+            if (!messagesYArray) {
+                console.error("messagesYArray is not initialized for voice.");
+                showMessageBox("Chatroom not fully initialized. Please try selecting it again.");
                 return;
             }
             if (mediaRecorder && mediaRecorder.state === 'recording') {
@@ -412,8 +441,15 @@
                             timestamp: new Date().toISOString(),
                             senderId: userId // Use the unique user ID
                         };
-                        messagesYArray.push([newVoiceMessage]); // Add to Y.Array
-                        audioChunks = []; // Clear for next recording
+                        console.log("Sending voice message:", newVoiceMessage);
+                        try {
+                            // Corrected: Push the message object directly
+                            messagesYArray.push(newVoiceMessage);
+                            audioChunks = []; // Clear for next recording
+                        } catch (e) {
+                            console.error("Error pushing voice message to Y.Array:", e);
+                            showMessageBox("Failed to send voice message. Check console for details.");
+                        }
                     };
                     reader.readAsDataURL(audioBlob);
                     stream.getTracks().forEach(track => track.stop()); // Stop microphone
@@ -440,8 +476,10 @@
 
         // --- WebRTC + Yjs Integration ---
         function selectChatroom(id, name) {
+            console.log(`Selecting chatroom: ${name} (ID: ${id})`);
             // Disconnect from previous chatroom if any
             if (currentWebrtcProvider) {
+                console.log("Destroying previous WebRTC provider and Y.Doc.");
                 currentWebrtcProvider.destroy();
                 currentYdoc.destroy(); // Clean up Y.Doc
                 currentYdoc = null;
@@ -455,25 +493,29 @@
 
             // Initialize Y.Doc for the selected chatroom
             currentYdoc = new Y.Doc();
+            console.log("New Y.Doc created for chatroom:", currentYdoc);
+
             // Get the Y.Array for messages (or create if it doesn't exist)
             messagesYArray = currentYdoc.getArray('messages');
+            console.log("Y.Array 'messages' obtained:", messagesYArray);
 
             // Listen for changes in the Y.Array and re-render messages
             messagesYArray.observe(event => {
+                console.log("Y.Array changed:", event.changes.delta);
                 // When an update occurs, get the current state of the array and render
                 const messages = messagesYArray.toArray();
                 renderMessages(messages);
             });
 
             // Initialize y-webrtc provider with a public signaling server
-            // This signaling server helps peers discover each other across different networks.
-            // The actual message data is still transferred peer-to-peer via WebRTC.
             currentWebrtcProvider = new Y.WebrtcProvider(id, currentYdoc, {
                 signaling: ['wss://signaling.yjs.dev'] // Public signaling server
             });
+            console.log("Y.WebrtcProvider initialized for room:", id);
 
             // Update peer count display
             currentWebrtcProvider.on('peers', ({ connectedPeers }) => {
+                console.log("Connected peers updated:", connectedPeers.size);
                 peerCountDisplay.textContent = `Connected Peers: ${connectedPeers.size + 1}`; // +1 for self
             });
 
